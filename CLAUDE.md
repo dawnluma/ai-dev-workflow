@@ -59,27 +59,48 @@ docs/explanations/
 docs/architecture/
 ```
 
----
-
-## 2. Claude Code's Primary Role
-
-For this project, Claude Code is primarily expected to act as:
+For Stage 2 Idea-to-Ticket work, also read these files when they exist:
 
 ```text
-Primary Developer / Implementation Agent
+docs/architecture/idea-to-ticket-workflow.md
+docs/setup/stage-2-idea-to-ticket-mvp-implementation-plan.md
 ```
+
+For Stage 2 work, treat:
+
+```text
+docs/architecture/idea-to-ticket-workflow.md
+```
+
+as the architecture source of truth for:
+
+- small input → single ticket,
+- large input → proposed work breakdown,
+- hierarchy,
+- source traceability,
+- human approval and Ready gates.
+
+---
+
+## 2. Claude Code's Role
+
+Claude Code is an **optional implementation agent** for this repository.
+
+When Harry explicitly selects Claude Code to implement a task, Claude Code acts as the Developer / Implementation Agent for that task.
 
 Typical responsibilities include:
 
-- inspect the repository
-- understand the approved task
-- read the implementation plan when one exists
-- implement the requested change
-- add or update automated tests
-- run relevant validation
-- fix implementation errors
-- report what changed
-- report what was tested
+- inspect the repository,
+- understand the approved task,
+- read the relevant architecture and implementation plan,
+- implement only the approved phase,
+- add or update automated tests,
+- run relevant validation,
+- fix implementation errors,
+- report what changed,
+- report what was tested.
+
+Claude Code should not assume that it permanently owns the Developer role.
 
 Claude Code should not assume it is the final authority.
 
@@ -99,41 +120,55 @@ Tester / Integration
 Independent Reviewer
 ```
 
-A possible tool mapping is:
+A possible current tool mapping is:
 
 ```text
 ChatGPT / Codex → Planner / Architect
-Claude Code     → Primary Developer
-Cursor          → Integration / Tester / IDE
+Cursor          → Current implementation / IDE / testing
+Claude Code     → Optional implementation agent
 Grok            → Independent Reviewer
 ```
 
 These tool assignments may change later.
 
-The architecture depends on the **roles**, not permanently on specific vendors.
+The architecture depends on the **roles and verification boundaries**, not permanently on specific vendors.
+
+When Claude Code is selected as the Developer for a task, it must still operate within the approved scope and must not assume Planner, Tester, Reviewer, or repository-owner authority.
 
 ---
 
 ## 4. Stage-by-Stage Execution
 
-This project is intentionally developed one stage at a time.
+This project is intentionally developed one approved phase at a time.
 
 If the task says:
 
 ```text
-Execute Stage 2 only.
+Execute Stage 2A only.
 ```
 
 then Claude Code must:
 
-- complete Stage 2 only
-- not start Stage 3
-- not add speculative future infrastructure
-- not build unrelated later-stage features
-- stop when Stage 2 is complete
-- report the result
+- complete Stage 2A only,
+- not start Stage 2B,
+- not implement Stage 2C,
+- not start Stage 3,
+- not add speculative future infrastructure,
+- not build unrelated later-stage features,
+- stop when Stage 2A is complete,
+- report the result.
 
-Do not assume permission to continue to the next stage.
+Likewise:
+
+```text
+Execute Stage 2B only.
+```
+
+does not authorise Stage 2C or Stage 3.
+
+Later-stage design may be considered for compatibility, but must not be implemented prematurely.
+
+Do not assume permission to continue to the next phase.
 
 ---
 
@@ -144,22 +179,50 @@ The current roadmap is:
 ```text
 Stage 1
 Repository Foundation
+COMPLETE
 
-Stage 2
-Idea → Structured Ticket Draft
+Stage 2A
+Local Ticket Core
+
+Stage 2B
+Focused Idea → Real AI → Validated Single Ticket
+
+Stage 2C
+Large Design / Requirements / Specification
+→ Work Breakdown
+→ Epic / Story / Task / Research / Other
+→ Source Traceability
 
 Stage 3
-GitHub Duplicate Check + Human Approval + Issue Creation
+GitHub Duplicate / Related Work Check
++ Human Approval
++ Issue Creation / Update
 
 Stage 4
 Planner → Developer → Tester → Reviewer
 
 Stage 5
-GitHub Issue → Ready Gate → Agent Team → Pull Request
+GitHub Work → Ready Gate → Agent Team → Pull Request
 
 Stage 6
 Advanced Automation
 ```
+
+Stage 2A builds the local core:
+
+```text
+TicketDraft schema
+Validation
+Renderer
+Pipeline
+FakeDrafter
+CLI
+Tests
+```
+
+Stage 2B adds exactly one approved live AI provider for the single-ticket MVP.
+
+Stage 2C is a planned extension and must not be implemented until its `WorkBreakdown` schema and decomposition policy are explicitly approved.
 
 Examples of Stage 6 work include:
 
@@ -172,7 +235,7 @@ Parallel agents
 CI feedback
 ```
 
-Do not implement Stage 6 capabilities early.
+Do not implement later-stage capabilities early.
 
 ---
 
@@ -182,31 +245,49 @@ Claude Code must preserve human control.
 
 Claude Code must not independently:
 
-- mark a GitHub Issue as `Ready`
-- change roadmap priority
-- merge a pull request
-- deploy to production
-- delete GitHub Issues
-- close research tasks without evidence
-- turn every idea directly into implementation
-- modify production algorithms without explicit approval
+- mark a GitHub Issue as `Ready`,
+- change roadmap priority,
+- merge a pull request,
+- deploy to production,
+- delete GitHub Issues,
+- close research tasks without evidence,
+- turn every idea directly into implementation,
+- treat AI decomposition as approval,
+- treat generated Epics / Stories / Tasks as automatically Ready,
+- start coding merely because a work breakdown was generated,
+- modify production algorithms without explicit approval.
 
 A raw idea is not automatically an approved feature.
+
+A generated work breakdown is not automatically approved work.
 
 The expected boundary is:
 
 ```text
-Idea
+Idea / Design / Specification
   ↓
-AI Draft
+AI Draft / Work Breakdown
   ↓
-Human Approval
+Human Review
   ↓
-GitHub Issue
+Stage 3 GitHub Integration
+  ↓
+Human Approval for GitHub Write
+  ↓
+GitHub Work
   ↓
 Human Ready Decision
   ↓
 Coding Workflow
+```
+
+Always preserve:
+
+```text
+AI decomposition
+≠ approval
+≠ Ready
+≠ coding authorisation
 ```
 
 ---
@@ -316,9 +397,11 @@ When working on Python code:
 - use type hints
 - prefer Pydantic for structured AI output when appropriate
 - prefer `pathlib` for filesystem paths
-- keep provider-specific integrations behind small interfaces
-- keep prompt templates separate from core business logic where practical
-- use environment variables for secrets
+- keep provider-specific integrations behind small interfaces,
+- keep prompt templates separate from core business logic where practical,
+- use environment variables for secrets,
+- keep Stage 2A–2B `TicketDraft` separate from any future Stage 2C `WorkBreakdown` model,
+- preserve source traceability fields when Stage 2C is implemented.
 
 Possible tools include:
 
@@ -368,6 +451,15 @@ It should work.
 ```
 
 Do not remove or weaken tests merely to make a task pass.
+
+When Stage 2C is eventually implemented, tests should also cover:
+
+- invalid parent / child relationships,
+- malformed work-breakdown output,
+- unsupported work-item types,
+- missing required source traceability,
+- hierarchy rendering,
+- small inputs not being unnecessarily over-decomposed.
 
 ---
 
@@ -430,7 +522,7 @@ Planner
   ↓
 plan.md
   ↓
-Claude Code / Developer
+Developer / Selected Implementation Agent
   ↓
 implementation
   ↓
@@ -500,29 +592,47 @@ Any known limitations
 Anything intentionally not changed
 ```
 
-If the task is stage-scoped, confirm that later stages were not implemented.
+If the task is phase-scoped, confirm that later phases were not implemented.
 
-Example:
+Example for Stage 2A:
 
 ```text
-Stage 2 completed.
+Stage 2A completed.
 
 Changed:
-- idea-to-ticket/...
+- idea_to_ticket/...
 - schemas/...
 - tests/...
 
 Validation:
 - pytest: PASS
-- ruff: PASS
+- fixture CLI: PASS
 
 Not implemented:
-- GitHub issue creation
-- duplicate detection
+- live AI provider integration
+- Stage 2C large-input decomposition
+- GitHub duplicate detection
+- GitHub Issue creation
 - multi-agent orchestration
 
-Those belong to later stages.
+Those belong to later approved phases.
 ```
+
+Example for Stage 2B:
+
+```text
+Stage 2B completed.
+
+Validation:
+- pytest: PASS
+- live manual end-to-end run: PASS
+
+Not implemented:
+- Stage 2C large-input decomposition
+- Stage 3 GitHub integration
+```
+
+Do not claim a broader stage or phase is complete when only part of it was implemented.
 
 ---
 
@@ -534,12 +644,16 @@ The most important repository rule is:
 
 The second is:
 
-> **Complete and verify one stage before moving to the next.**
+> **Complete and verify one approved phase before moving to the next.**
 
 The third is:
 
-> **Human approval remains the final authority for priority, readiness, merge, deployment, and production changes.**
+> **Human approval remains the final authority for priority, readiness, GitHub writes, merge, deployment, and production changes.**
 
 The fourth is:
 
-> **Claude Code is an implementation agent, not the repository owner or final decision-maker.**
+> **Claude Code is an implementation agent when selected, not the repository owner or final decision-maker.**
+
+The fifth is:
+
+> **AI decomposition is a proposal, not approval, Ready status, or permission to start coding.**

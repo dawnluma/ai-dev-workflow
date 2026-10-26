@@ -23,7 +23,7 @@ The goal is to build a controlled development system where AI can help capture, 
 - [7. Human Approval Boundaries](#7-human-approval-boundaries)
 - [8. Repository Structure](#8-repository-structure)
 - [9. Folder Explanations](#9-folder-explanations)
-  - [9.1 `idea-to-ticket/`](#91-idea-to-ticket)
+  - [9.1 `idea_to_ticket/`](#91-idea_to_ticket)
   - [9.2 `orchestrator/`](#92-orchestrator)
   - [9.3 `prompts/`](#93-prompts)
   - [9.4 `schemas/`](#94-schemas)
@@ -64,25 +64,41 @@ This repository is an experimental AI development workflow project.
 
 It is intended to be publishable as a **public repository** containing generic framework code, documentation, schemas, tests, examples, and architecture. Sensitive project integrations and private operational context belong in a separate private integration layer.
 
-It is designed to answer two questions:
+It is designed to answer three questions:
 
-1. Can AI help turn a rough idea into a useful, structured GitHub Issue before coding starts?
-2. Once an issue is approved and ready, can multiple AI agents collaborate through planning, implementation, testing, and review?
+1. Can AI help turn a small rough idea into a useful, structured ticket before coding starts?
+2. Can AI analyse a large design, requirements document, architecture document, or specification and propose a traceable work breakdown such as Epic → Story → Task?
+3. Once approved work is ready, can multiple AI agents collaborate through planning, implementation, testing, and review?
 
 The intended end-to-end flow is:
 
 ```text
-Idea
+Idea / Design / Specification
   ↓
 AI Intake
   ↓
-Structured Ticket
+Understand Scope
   ↓
-Human Approval
+┌─────────────────────────────┐
+│ Small / Focused Input       │
+│   ↓                         │
+│ Single Ticket Draft         │
+│                             │
+│ Large / Complex Input       │
+│   ↓                         │
+│ Work Breakdown              │
+│   ↓                         │
+│ Epic / Story / Task /       │
+│ Research / Other Work       │
+└─────────────────────────────┘
   ↓
-GitHub Issue
+Schema Validation
   ↓
-Ready
+Human Review
+  ↓
+GitHub Integration
+  ↓
+Ready Gate
   ↓
 Planner / Architect
   ↓
@@ -99,9 +115,24 @@ Human Review
 Merge
 ```
 
+A key design rule is:
+
+```text
+AI decomposition
+≠ approval
+≠ Ready status
+≠ permission to start coding
+```
+
 This repository is **not** intended to contain MarketLens production code.
 
 A project such as MarketLens may later become a real consumer of this workflow.
+
+Detailed Idea-to-Ticket architecture lives in:
+
+```text
+docs/architecture/idea-to-ticket-workflow.md
+```
 
 ---
 
@@ -167,44 +198,68 @@ Pull Request
 
 ```mermaid
 flowchart TD
-    A[Harry / Human] --> B[Raw Idea]
-    B --> C[AI Idea Intake]
-    C --> D[Classify / Triage]
-    D --> E[Duplicate / Related Issue Check]
-    E --> F[Priority Suggestion]
-    F --> G[Structured Ticket Draft]
-    G --> H{Human Approval}
+    A[Harry / Human] --> B[Idea / Design / Specification]
+    B --> C[AI Intake]
+    C --> D[Understand / Classify / Determine Scope]
+    D --> E{Small or Large?}
 
-    H -->|Reject| I[Reject]
-    H -->|Park| J[Parked]
-    H -->|Approve| K[GitHub Issue]
+    E -->|Small / Focused| F[Single Ticket Draft]
+    E -->|Large / Complex| G[Proposed Work Breakdown]
 
-    K --> L{Ready for Development?}
-    L -->|No| M[Backlog / Next / Research]
-    L -->|Yes| N[AI Orchestrator]
+    G --> G1[Epic / Story / Task / Research / Other]
+    G1 --> H[Schema Validation / Traceability]
+    F --> H
 
-    N --> O[Planner / Architect]
-    O --> P[Developer]
-    P --> Q[Tester / Integration]
-    Q --> R[Independent Reviewer]
+    H --> I{Human Review}
+    I -->|Reject| J[Reject]
+    I -->|Park| K[Parked]
+    I -->|Edit / Approve| L[Approved Draft]
 
-    R -->|FAIL| P
-    R -->|PASS| S[Pull Request]
+    L --> M[Stage 3: GitHub Duplicate / Related Work Check]
+    M --> N{Human Approval for GitHub Write?}
+    N -->|No| O[Stop / Revise]
+    N -->|Yes| P[GitHub Issue / Linked Work]
 
-    S --> T{Human Review}
-    T -->|Changes Requested| P
-    T -->|Approved| U[Merge]
+    P --> Q{Ready for Development?}
+    Q -->|No| R[Backlog / Next / Research]
+    Q -->|Yes| S[AI Orchestrator]
+
+    S --> T[Planner / Architect]
+    T --> U[Developer]
+    U --> V[Tester / Integration]
+    V --> W[Independent Reviewer]
+
+    W -->|FAIL| U
+    W -->|PASS| X[Pull Request]
+
+    X --> Y{Human Review}
+    Y -->|Changes Requested| U
+    Y -->|Approved| Z[Merge]
 ```
 
-The most important boundary is:
+The most important boundaries are:
 
 ```text
-GitHub Issue
+AI Draft / Decomposition
+        ↓
+Human Review
+        ↓
+GitHub Write Approval
+        ↓
+GitHub Work
+        ↓
+Human Ready Decision
+        ↓
+Coding Workflow
 ```
 
-The **Idea-to-Ticket workflow** finishes when an approved issue is created and properly classified.
+The **Idea-to-Ticket workflow** prepares structured work before coding.
 
-The **Multi-Agent Coding workflow** begins only when the issue is explicitly considered ready for implementation.
+The **GitHub Integration stage** performs duplicate / related-work checks and GitHub writes only after explicit human approval.
+
+The **Multi-Agent Coding workflow** begins only when work is explicitly considered ready for implementation.
+
+Capturing or decomposing an idea does not authorise implementation.
 
 ---
 
@@ -290,49 +345,67 @@ A useful rule is:
 
 # 5. Idea-to-Ticket Workflow
 
-The first workflow focuses on everything that happens **before coding starts**.
+The first workflow focuses on understanding and organising work **before coding starts**.
+
+It supports two input shapes.
+
+### Small / focused input
 
 ```mermaid
 flowchart TD
-    A[Raw Idea] --> B[Understand Intent]
+    A[Small Idea] --> B[Understand Intent]
     B --> C[Classify]
-    C --> D[Search Existing Issues]
-    D --> E{Possible Duplicate?}
+    C --> D[Suggest Type / Priority / Missing Information]
+    D --> E[Structured Ticket Draft]
+    E --> F[Schema Validation]
+    F --> G[Readable Ticket]
+    G --> H{Human Review}
+```
 
-    E -->|Yes| F[Recommend Update / Review Existing Issue]
-    E -->|No| G[Create New Ticket Draft]
+### Large / complex input
 
-    F --> H[Priority Suggestion]
-    G --> H
-
-    H --> I[Structured Output]
-    I --> J{Human Approval}
-
-    J -->|No| K[Stop / Park / Edit]
-    J -->|Yes| L[Create GitHub Issue]
+```mermaid
+flowchart TD
+    A[Large Design / Requirements / Specification] --> B[AI Analysis]
+    B --> C[Determine Scope]
+    C --> D[Proposed Work Breakdown]
+    D --> E[Epic / Story / Task / Research / Other]
+    E --> F[Parent / Child Relationships]
+    F --> G[Source Traceability]
+    G --> H[Schema Validation]
+    H --> I[Human-Readable Breakdown]
+    I --> J{Human Review}
 ```
 
 The AI may help with:
 
-- understanding the idea
+- understanding the input
 - classification
 - identifying missing information
 - suggesting priority
-- searching for related tickets
-- suggesting duplicates
-- drafting ticket content
-- suggesting labels
-- identifying whether research is required
+- drafting a single ticket
+- proposing Epic / Story / Task decomposition for large inputs
+- suggesting Research, Experiment, Architecture, Data, Bug, Refactor, or Documentation work
+- preserving source context for generated work items
 - generating structured output
 
 The AI must not automatically:
 
+- create or modify GitHub Issues during Stage 2
+- search GitHub Issues during Stage 2
+- mark work as `Ready`
 - start implementation
 - change production code
-- change production algorithms
-- mark work as `Ready`
 - merge code
 - deploy code
+
+Duplicate / related GitHub Issue search belongs to **Stage 3**, not Stage 2.
+
+Detailed rules for small-vs-large input behaviour are defined in:
+
+```text
+docs/architecture/idea-to-ticket-workflow.md
+```
 
 ---
 
@@ -371,17 +444,17 @@ Tester / Integration
 Independent Reviewer
 ```
 
-Current recommended role mapping:
+Current working role mapping:
 
 ```text
 Harry           → Repository owner / final authority
 ChatGPT / Codex → Planner / Architect
-Claude Code     → Primary Developer / Implementation Agent
-Cursor          → Integration / Tester / IDE
-Grok            → Independent Reviewer
+Cursor          → Current implementation / IDE / testing tool
+Claude Code     → Optional implementation agent
+Grok            → Independent reviewer (formal role later)
 ```
 
-Claude Code can be used as the primary implementation agent before the formal multi-agent pipeline is complete.
+Cursor can implement the current Stage 2 work. Claude Code may be added later as an alternative implementation agent.
 
 However, the architecture should still depend on **roles**, not permanently on specific vendors.
 
@@ -393,7 +466,7 @@ Human control is a core design principle.
 
 ```mermaid
 flowchart LR
-    A[AI Can Recommend] --> B[Human Decides]
+    A[AI Can Analyse / Draft / Decompose / Recommend] --> B[Human Decides]
     B --> C[Action]
 ```
 
@@ -402,9 +475,9 @@ AI may:
 ```text
 Analyse
 Classify
-Search
 Summarise
 Draft
+Decompose
 Recommend
 Implement approved work
 Test
@@ -417,7 +490,9 @@ The human remains responsible for:
 Approve
 Reject
 Park
+Change hierarchy
 Change priority
+Approve GitHub writes
 Mark Ready
 Authorise development
 Approve merge
@@ -427,17 +502,30 @@ Authorise deployment
 A useful boundary is:
 
 ```text
-Idea
+Idea / Design
   ↓
-AI Draft
+AI Draft / Work Breakdown
   ↓
-Human Approval
+Human Review
   ↓
-GitHub Issue
+GitHub Integration
+  ↓
+Human Approval for Write
+  ↓
+GitHub Issue(s)
   ↓
 Human Ready Decision
   ↓
 Coding Workflow
+```
+
+The system must preserve:
+
+```text
+AI decomposition
+≠ approval
+≠ Ready status
+≠ coding authorisation
 ```
 
 ---
@@ -449,7 +537,7 @@ Recommended public repository structure:
 ```text
 ai-dev-workflow/
 │
-├── idea-to-ticket/
+├── idea_to_ticket/
 ├── orchestrator/
 ├── prompts/
 ├── schemas/
@@ -464,6 +552,7 @@ ai-dev-workflow/
 ├── AGENTS.md
 ├── CLAUDE.md
 ├── README.md
+├── pyproject.toml
 ├── .gitignore
 └── .env.example
 ```
@@ -472,7 +561,7 @@ Mermaid view:
 
 ```mermaid
 flowchart TD
-    A[ai-dev-workflow/] --> B[idea-to-ticket/]
+    A[ai-dev-workflow/] --> B[idea_to_ticket/]
     A --> C[orchestrator/]
     A --> D[prompts/]
     A --> E[schemas/]
@@ -486,46 +575,58 @@ flowchart TD
     A --> J[AGENTS.md]
     A --> K[CLAUDE.md]
     A --> L[README.md]
-    A --> M[.gitignore]
-    A --> N[.env.example]
+    A --> M[pyproject.toml]
+    A --> N[.gitignore]
+    A --> O[.env.example]
 ```
 
 ---
 
 # 9. Folder Explanations
 
-## 9.1 `idea-to-ticket/`
+## 9.1 `idea_to_ticket/`
 
 Purpose:
 
-> Contains the application logic for converting a raw idea into a structured ticket.
+> Contains the local application logic for converting input into validated Idea-to-Ticket output.
 
-Possible responsibilities:
+Stage 2A–2B responsibilities include:
 
 ```text
 Input handling
-Idea analysis
-Classification
-Priority recommendation
-Duplicate checking
-Ticket drafting
-GitHub issue creation
-Human approval flow
+Prompt loading
+Provider boundary
+Single-ticket pipeline
+Schema validation
+Readable rendering
+Fixture / CLI flow
 ```
 
-Example future files:
+Stage 2C may later add:
 
 ```text
-idea-to-ticket/
-├── cli.py
-├── intake.py
-├── classifier.py
-├── duplicate_checker.py
-├── ticket_builder.py
-└── github_client.py
+Large-input scope detection
+Work-breakdown generation
+Hierarchy validation
+Parent / child relationships
+Source traceability
+Human-readable hierarchy rendering
 ```
 
-This should be the first real application area developed in the project.
+GitHub duplicate detection and GitHub Issue creation do **not** belong in the Stage 2 responsibilities of this package. Those are Stage 3 integration concerns.
+
+Expected MVP files:
+
+```text
+idea_to_ticket/
+├── __init__.py
+├── idea.py
+├── pipeline.py
+├── provider.py
+└── render.py
+```
+
+This is the first real application area developed in the project.
 
 ---
 
@@ -603,7 +704,8 @@ Example models:
 
 ```text
 TicketDraft
-IssueSearchResult
+WorkBreakdown (Stage 2C)
+IssueSearchResult (Stage 3)
 PlannerOutput
 TestReport
 ReviewResult
@@ -911,23 +1013,30 @@ and `.env` must not be committed.
 
 ```mermaid
 flowchart TD
-    A[Stage 1<br/>Repository Foundation]
-    --> B[Stage 2<br/>Idea-to-Ticket MVP]
-    --> C[Stage 3<br/>GitHub Integration]
-    --> D[Idea-to-Ticket Complete]
-    --> E[Stage 4<br/>Multi-Agent Coding MVP]
-    --> F[Stage 5<br/>Connect Both Workflows]
-    --> G[Full Basic Pipeline]
-    --> H[Stage 6<br/>Advanced Automation]
+    A[Stage 1<br/>Repository Foundation<br/>Complete]
+    --> B[Stage 2A<br/>Local Ticket Core]
+    --> C[Stage 2B<br/>Live AI Single-Ticket MVP]
+    --> D[Single-Ticket MVP Complete]
+    --> E[Stage 2C<br/>Large Input Decomposition]
+    --> F[Stage 3<br/>GitHub Integration]
+    --> G[Idea-to-Ticket Complete]
+    --> H[Stage 4<br/>Multi-Agent Coding MVP]
+    --> I[Stage 5<br/>Connect Both Workflows]
+    --> J[Full Basic Pipeline]
+    --> K[Stage 6<br/>Advanced Automation]
 ```
 
 Rule:
 
-> Complete and verify one stage before moving to the next.
+> Complete and verify the current approved phase before moving to the next one.
+
+Stage 2C is intentionally a separate extension so large-design decomposition does not overcomplicate the first single-ticket MVP.
 
 ---
 
 # 12. Stage 1 — Repository Foundation
+
+**Status: Complete ✅**
 
 Goal:
 
@@ -975,24 +1084,64 @@ Baseline commit pushed
 
 # 13. Stage 2 — Idea-to-Ticket MVP
 
+Stage 2 is divided into three sub-phases.
+
+## Stage 2A — Local Core
+
 Goal:
 
 ```text
-Raw Idea
+Structured Ticket Fixture
   ↓
-Structured Ticket Draft
+Schema Validation
+  ↓
+Readable Ticket
 ```
 
-Example CLI:
-
-```bash
-python idea.py
-```
-
-Prompt:
+Build the local core with:
 
 ```text
-What is your idea?
+TicketDraft schema
+Pydantic validation
+Pipeline
+Renderer
+FakeDrafter
+CLI
+Automated tests
+```
+
+No live AI API is required.
+
+Primary CLI:
+
+```bash
+python -m idea_to_ticket.idea --fixture examples/sample-ticket.json
+```
+
+Stage 2A is complete when automated tests pass and the fixture CLI works.
+
+Stage 2A alone is **not** the single-ticket MVP.
+
+## Stage 2B — Live AI Integration
+
+Goal:
+
+```text
+Focused Raw Idea
+  ↓
+One Approved AI Provider
+  ↓
+Structured Ticket Draft
+  ↓
+Schema Validation
+  ↓
+Readable Ticket
+```
+
+Primary CLI:
+
+```bash
+python -m idea_to_ticket.idea
 ```
 
 Example input:
@@ -1001,36 +1150,76 @@ Example input:
 I want to investigate market breadth for MarketLens.
 ```
 
-Possible output:
+Only one approved provider should be implemented for the MVP.
+
+Provider and model selection remain a human decision.
+
+No GitHub search or write action belongs in Stage 2B.
+
+Stage 2B is complete only after a successful manual live end-to-end run.
+
+At that point the **single-ticket MVP is complete**.
+
+## Stage 2C — Large Input Decomposition
+
+Stage 2C is a planned extension for inputs such as:
 
 ```text
-Title:
-Research Market Regime Detection
-
-Type:
-RESEARCH
-
-Priority:
-NEXT
-
-Problem:
-...
-
-Hypothesis:
-...
-
-Ready for Development:
-No
-
-Recommended Action:
-Create research ticket
+Large Product Design
+Requirements Document
+Architecture Document
+Technical Specification
 ```
 
-No GitHub write action yet.
+Target flow:
 
-Claude Code may be used as the **primary implementation agent** for building the Stage 2 MVP.
+```text
+Large Design / Specification
+  ↓
+AI Analysis
+  ↓
+Hierarchical Work Breakdown
+  ↓
+Epic / Story / Task / Research / Other Work
+  ↓
+Hierarchy Validation
+  ↓
+Source Traceability
+  ↓
+Human-Readable Proposed Breakdown
+  ↓
+Human Review
+```
 
-At this stage Claude Code must not implement Stage 3 functionality early.
+Stage 2C should define a separate `WorkBreakdown` schema rather than overloading `TicketDraft`.
+
+Possible future hierarchy fields include:
+
+```text
+id
+parent_id
+work_item_level
+children
+dependencies
+source_context
+```
+
+Stage 2C must preserve:
+
+```text
+AI decomposition
+≠ approval
+≠ Ready
+≠ coding authorisation
+```
+
+Do not implement Stage 2C until its schema and decomposition policy are separately approved.
+
+See:
+
+```text
+docs/architecture/idea-to-ticket-workflow.md
+```
 
 ---
 
@@ -1040,16 +1229,15 @@ Goal:
 
 ```mermaid
 flowchart TD
-    A[Idea] --> B[AI Draft]
-    B --> C[Search GitHub Issues]
-    C --> D{Related / Duplicate?}
-    D -->|Yes| E[Recommend Existing Issue]
-    D -->|No| F[New Ticket Draft]
-    E --> G[Human Review]
-    F --> G
-    G --> H{Approve?}
-    H -->|No| I[Stop]
-    H -->|Yes| J[Create GitHub Issue]
+    A[Approved Ticket / Work Breakdown Draft] --> B[Search Existing GitHub Work]
+    B --> C{Related / Duplicate?}
+    C -->|Yes| D[Recommend Existing Work / Update]
+    C -->|No| E[Propose New GitHub Work]
+    D --> F[Human Review]
+    E --> F
+    F --> G{Approve GitHub Write?}
+    G -->|No| H[Stop / Revise]
+    G -->|Yes| I[Create / Update GitHub Issue]
 ```
 
 Suggested approval prompt:
@@ -1066,7 +1254,11 @@ No
 
 No approval means no GitHub write.
 
-Claude Code may continue as the primary implementation agent for Stage 3, but human approval remains mandatory before creating or modifying GitHub Issues.
+Stage 3 is where duplicate / related-work search belongs.
+
+For decomposed work, linked issues or sub-issues may be considered only after the Stage 2C hierarchy model is implemented and explicitly approved.
+
+Human approval remains mandatory before creating or modifying GitHub Issues.
 
 ---
 
@@ -1172,7 +1364,7 @@ Production changes
 
 # 18. Tooling Strategy
 
-Current recommended working arrangement:
+Current working arrangement:
 
 ```text
 Harry
@@ -1181,34 +1373,33 @@ Harry
 ChatGPT / Codex
 → Planner / Architect
 
-Claude Code
-→ Primary Developer / Implementation Agent
-
 Cursor
-→ Integration / Tester / IDE
+→ Current implementation / IDE / testing tool
+
+Claude Code
+→ Optional implementation agent
 
 Grok
-→ Independent Reviewer
+→ Independent reviewer (formal role later)
 ```
 
-Claude Code may start being useful from **Stage 2**, when implementation begins.
+Cursor can implement Stage 2A and Stage 2B.
 
-At **Stage 4**, Claude Code formally occupies the Developer role in the multi-agent workflow.
+Claude Code is **not required** to begin Stage 2. It may be introduced later as an alternative or additional implementation agent.
 
-Cursor remains valuable as:
+At Stage 4, roles become formal workflow contracts:
 
 ```text
-IDE
-Diff inspection
-Integration testing
-Debugging
-Manual verification
-Targeted fixes when needed
+Planner
+Developer
+Tester
+Reviewer
 ```
 
 Possible future tools:
 
 ```text
+Claude Code
 OpenCode
 Ollama
 Local models
@@ -1218,29 +1409,11 @@ Other model providers
 
 Important:
 
-> The architecture should depend on roles, not vendor names.
-
-Think in terms of:
-
-```text
-Planner
-Developer
-Tester
-Reviewer
-```
-
-rather than:
-
-```text
-Tool A
-Tool B
-Tool C
-Tool D
-```
+> The architecture should depend on roles and verification boundaries, not vendor names.
 
 `AGENTS.md` remains the vendor-neutral rulebook.
 
-`CLAUDE.md` is the Claude Code-specific entry point.
+`CLAUDE.md` is only the Claude Code-specific entry point when Claude Code is used.
 
 ---
 
@@ -1263,7 +1436,7 @@ git --version
 gh --version
 ```
 
-Recommended when implementation begins:
+Optional implementation agent:
 
 ```text
 Claude Code
@@ -1300,25 +1473,31 @@ Install dependencies later when `requirements.txt` or `pyproject.toml` is added.
 
 # 20. Basic Usage
 
-The first meaningful CLI may eventually look like:
+Stage 2A fixture mode:
 
 ```bash
-python idea.py
+python -m idea_to_ticket.idea --fixture examples/sample-ticket.json
+```
+
+Stage 2B live mode:
+
+```bash
+python -m idea_to_ticket.idea
 ```
 
 or:
 
 ```bash
-python -m idea_to_ticket
+python -m idea_to_ticket.idea --idea "Investigate whether market breadth can improve signal quality."
 ```
 
-Example:
+Example interactive input:
 
 ```text
 What is your idea?
 
 > Investigate whether market breadth and the S&P 500 trend
-  can improve MarketLens signal quality.
+  can improve signal quality.
 ```
 
 Expected result:
@@ -1335,10 +1514,9 @@ No
 
 Recommended Action:
 Create research ticket
-
-Required Next Step:
-Define baseline and backtest metrics
 ```
+
+Stage 2C will later add large-document / specification input and hierarchical work-breakdown output.
 
 ---
 
@@ -1438,6 +1616,10 @@ Example:
 ```
 
 Structured output should be validated before being used by automation.
+
+For Stage 2A–2B, `TicketDraft` is the canonical single-ticket model and `duplicate_of` remains `null`.
+
+Stage 2C should introduce a separate hierarchical model such as `WorkBreakdown`, with approved fields for parent / child relationships and `source_context` traceability. Do not force an entire Epic / Story / Task hierarchy into one `TicketDraft`.
 
 ---
 
@@ -1622,6 +1804,7 @@ Examples:
 
 ```text
 docs/setup/fresh-setup-guide.md
+docs/setup/stage-2-idea-to-ticket-mvp-implementation-plan.md
 
 docs/explanations/what-is-agents-md.md
 docs/explanations/what-is-claude-md.md
@@ -1643,7 +1826,7 @@ The README should remain the project front door rather than becoming the home fo
 
 # 29. Example End-to-End Flow
 
-Example idea:
+### Small input example
 
 ```text
 I want to investigate using market breadth and
@@ -1656,20 +1839,46 @@ flowchart TD
     B --> C[Classify as Research / Experiment]
     C --> D[Priority Suggestion: NEXT]
     D --> E[Development Ready: NO]
-    E --> F[Create Research Ticket Draft]
-    F --> G[Human Approval]
-    G --> H[GitHub Issue]
+    E --> F[Validated Ticket Draft]
+    F --> G[Human Review]
+    G --> H[Stage 3 GitHub Integration]
     H --> I[Research / Backtest]
     I --> J{Evidence Supports Change?}
     J -->|No| K[Close / Park Research]
-    J -->|Yes| L[Create Feature / Implementation Issue]
-    L --> M[Mark Ready]
+    J -->|Yes| L[Create Feature / Implementation Work]
+    L --> M[Human Marks Ready]
     M --> N[Multi-Agent Coding Workflow]
     N --> O[Pull Request]
     O --> P[Human Review]
 ```
 
-This prevents an untested idea from immediately changing production behaviour.
+### Large input example
+
+```text
+Complete MarketLens design
+```
+
+may later produce:
+
+```text
+Epic: Market Data Platform
+├── Story: Historical market data ingestion
+├── Story: Local cache
+└── Data: Historical backfill
+
+Epic: Stock Screening
+├── Story: VCP detection
+├── Research: Confirm detection rules
+└── Task: Add validation tests
+
+Epic: Market Regime
+├── Research: Evaluate indicators
+└── Story: Classify market conditions
+```
+
+Every generated work item remains a proposal until human review.
+
+This prevents both an untested idea and a large AI-generated decomposition from immediately changing production behaviour.
 
 ---
 
@@ -1679,14 +1888,17 @@ The complete target system is:
 
 ```mermaid
 flowchart TD
-    A[Ideas / Bugs / Research / Feedback]
+    A[Ideas / Bugs / Research / Large Designs / Feedback]
     --> B[AI Idea-to-Ticket Workflow]
-    --> C[Prioritised GitHub Issues]
-    --> D[Ready Gate]
-    --> E[Automated Multi-Agent Coding Workflow]
-    --> F[Pull Request]
-    --> G[Human Review]
-    --> H[Merge]
+    --> C[Single Ticket or Traceable Work Breakdown]
+    --> D[Human Review]
+    --> E[GitHub Integration]
+    --> F[Prioritised GitHub Work]
+    --> G[Ready Gate]
+    --> H[Automated Multi-Agent Coding Workflow]
+    --> I[Pull Request]
+    --> J[Human Review]
+    --> K[Merge]
 ```
 
 Eventually the workflow may support:
@@ -1702,9 +1914,13 @@ Run history
 CI feedback loops
 Local models
 Cloud models
+Large-document ingestion
+Requirement traceability
+Dependency graphs
+GitHub sub-issues / linked work
 ```
 
-But these should be added gradually.
+These should be added gradually.
 
 ---
 
@@ -1746,40 +1962,36 @@ But these should be added gradually.
 
 ---
 
+## Principle 7
+
+> **AI decomposition is a proposal, not approval, Ready status, or permission to start coding.**
+
+---
+
 ## Current Starting Point
 
-The current starting point is:
+Stage 1 is complete.
+
+The current implementation target is:
 
 ```text
-Stage 1
+Stage 2A
   ↓
-Create the ai-dev-workflow repository
+Build the local ticket core
   ↓
-Create the base folder structure
+Schema + Validation + Renderer + Pipeline
   ↓
-Add README.md
-  ↓
-Add AGENTS.md
-  ↓
-Add CLAUDE.md
-  ↓
-Add docs/setup/
-  ↓
-Add docs/explanations/
-  ↓
-Add docs/architecture/
-  ↓
-Add examples/
-  ↓
-Document the public/private boundary
-  ↓
-Create the first baseline commit
+FakeDrafter + CLI + Tests
 ```
 
-After Stage 1 is verified, move to:
+After Stage 2A is verified:
 
 ```text
-Stage 2
+Stage 2B
   ↓
-Build the Idea-to-Ticket MVP
+Choose one AI provider / model
+  ↓
+Focused Idea → Real AI → Validated Ticket
 ```
+
+Stage 2C large-input decomposition is documented in the architecture but should not be implemented until its schema and decomposition policy are approved.
